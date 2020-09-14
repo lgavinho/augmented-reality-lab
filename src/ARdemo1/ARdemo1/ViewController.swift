@@ -9,18 +9,91 @@
 import UIKit
 import SceneKit
 import ARKit
+import SDDownloadManager
 
-class ViewController: UIViewController, ARSCNViewDelegate {
+class ViewController: UIViewController, ARSCNViewDelegate, URLSessionDelegate {
+    
+    // https://medium.com/ar-tips-and-tricks/how-to-add-arkit-ar-reference-images-from-the-internet-on-the-fly-eae3bc55fe0c
+    // https://stackoverflow.com/questions/52154892/adding-reference-images-to-arkit-from-the-app
 
     @IBOutlet var sceneView: ARSCNView!
     var videoNode: SKVideoNode!
     var videoPlayer: AVPlayer!
     
-    let videoExternalURL: URL = URL(string: "https://www.youtube.com/watch?v=Kty2sgZdpRo")!
-    let imageExternalURL: URL = URL(string: "https://midiacode.com/assets/images/robin-worrall-fpt10lxk0cg-unsplash-1024x683.jpg")!
+    var internalPath: String = ""
+    let videoExternalURL: URL = URL(string: "http://clips.vorwaerts-gmbh.de/big_buck_bunny.mp4")!
+    let imageExternalURL =  "https://midiacode.com/assets/images/robin-worrall-fpt10lxk0cg-unsplash-1024x683.jpg"
+        
+    /// Returns The Documents Directory
+    ///
+    /// - Returns: URL
+    func getDocumentsDirectory() -> URL {
+        let paths = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
+        print(paths)
+        let documentsDirectory = paths[0]
+        return documentsDirectory
+    }
+        
+    /// Creates A Set Of ARReferenceImages From All PNG Content In The Documents Directory
+    ///
+    /// - Returns: Set<ARReferenceImage>
+    func loadedImagesFromDirectoryContents() -> Set<ARReferenceImage>? {
+        var index = 0
+        var customReferenceSet = Set<ARReferenceImage>()
+        let documentsDirectory = getDocumentsDirectory()
+        let str = documentsDirectory.absoluteString + "imagesARforTracking/"
+        let imagesDirectory = URL(string: str)!
+        do {
+            let directoryContents = try FileManager.default.contentsOfDirectory(at: imagesDirectory, includingPropertiesForKeys: nil, options: [])
+            let filteredContents = directoryContents.filter{ $0.pathExtension == "jpg" }
+            print("Images found: \(filteredContents.count)")
+            filteredContents.forEach { (url) in
+                do {
+                    //1. Create A Data Object From Our URL
+                    let imageData = try Data(contentsOf: url)
+                    guard let image = UIImage(data: imageData) else { return }
+                    //2. Convert The UIImage To A CGImage
+                    guard let cgImage = image.cgImage else { return }
+                    //3. Get The Width Of The Image
+                    let imageWidth = CGFloat(4) //CGFloat(cgImage.width)
+                    print(imageWidth)
+                    //4. Create A Custom AR Reference Image With A Unique Name
+                    let customARReferenceImage = ARReferenceImage(cgImage, orientation: CGImagePropertyOrientation.up, physicalWidth: imageWidth)
+                    customARReferenceImage.name = "AR Resource\(index)"
+                    //4. Insert The Reference Image Into Our Set
+                    customReferenceSet.insert(customARReferenceImage)
+                    print("ARReference Image == \(customARReferenceImage)")
+                    index += 1
+                } catch {
+                    print("Error Generating Images == \(error)")
+                }
+            }
+        } catch {
+            print("Error Reading Directory Contents == \(error)")
+        }
+        //5. Return The Set
+        return customReferenceSet
+    }
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+//        let request = URLRequest.init(url: URL.init(string: imageExternalURL)!)
+//        let downloadKey = SDDownloadManager.shared.downloadFile(
+//            withRequest: request,
+//            inDirectory: "imagesARforTracking",
+//            withName: nil,
+//            onCompletion: { [weak self] (error, url) in
+//            if let error = error {
+//                print("Error is \(error as NSError)")
+//            } else {
+//                if let url = url {
+//                    print("Downloaded file's url is \(url.path)")
+//                    self?.internalPath = url.path
+//                }
+//            }
+//        })
+//        print("The key is \(downloadKey!)")
         
         // Set the view's delegate
         sceneView.delegate = self
@@ -43,12 +116,13 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         // Create a session configuration
         let configuration = ARImageTrackingConfiguration()
         
-        guard let arImages = ARReferenceImage.referenceImages(inGroupNamed: "AR Resources", bundle: nil) else { return }
+//        guard let arImages = ARReferenceImage.referenceImages(inGroupNamed: "AR Resources", bundle: nil) else { return }
         
-        configuration.trackingImages = arImages
+        let detectionImages = loadedImagesFromDirectoryContents()
+        configuration.trackingImages = detectionImages!
 
         // Run the view's session
-        sceneView.session.run(configuration)
+        sceneView.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
     }
     
     override func viewWillDisappear(_ animated: Bool) {
@@ -79,7 +153,6 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         node.addChildNode(container)
         container.isHidden = false
         
-//        guard let videoURL = Bundle.main.url(forResource: "video", withExtension: ".mp4") else { return }
         let videoURL = videoExternalURL
         videoPlayer = AVPlayer(url: videoURL)
         

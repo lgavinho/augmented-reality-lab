@@ -1,0 +1,16 @@
+PODS:
+  - SDDownloadManager (1.1.0)
+
+DEPENDENCIES:
+  - SDDownloadManager
+
+SPEC REPOS:
+  trunk:
+    - SDDownloadManager
+
+SPEC CHECKSUMS:
+  SDDownloadManager: 62a9339c03ea27606effefd9aa1800e4127e3a52
+
+PODFILE CHECKSUM: c98cc8aae2ac18d32f610b344e8d93f1cb543e28
+
+COCOAPODS: 1.8.4
